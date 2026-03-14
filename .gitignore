@@ -1,0 +1,16 @@
+.env
+.env.*
+# Keep secrets.toml in repo as empty template — real keys go in Streamlit Cloud dashboard
+# If you fill real keys locally, add: .streamlit/secrets.toml to your local gitignore
+__pycache__/
+*.pyc
+*.pyo
+.chroma/
+chroma_db/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+node_modules/
+.DS_Store
