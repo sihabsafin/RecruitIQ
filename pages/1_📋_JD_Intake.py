@@ -1,6 +1,7 @@
 import json
 import streamlit as st
 from utils.styles import inject_styles, page_header, section_title
+from utils.execution_log import run_crew_with_log
 from crews.crews import run_jd_intake_crew
 from utils.database import save_jd
 
@@ -20,17 +21,15 @@ if submitted:
         st.error("Please paste a job description.")
         st.stop()
 
-    with st.status("Running JD Intake Crew...", expanded=True) as status:
-        st.write("🤖 JD Parser Agent — extracting structure...")
-        st.write("🧠 Skills Extractor Agent — building taxonomy...")
-        st.write("⚖️ Bias Checker Agent — auditing language...")
-        try:
-            result = run_jd_intake_crew(jd_text)
-            status.update(label="✅ JD Intake complete!", state="complete")
-        except Exception as e:
-            status.update(label="Error", state="error")
-            st.error(f"Crew error: {e}")
-            st.stop()
+    try:
+        result = run_crew_with_log(
+            run_jd_intake_crew,
+            jd_text,
+            phase_name="JD Intake Crew",
+            agents=["JD Parser", "Skills Extractor", "Bias Checker"],
+        )
+    except Exception as e:
+        st.stop()
 
     jd_id = save_jd(job_title, company, jd_text, result.get("jd_parsed", {}))
     st.session_state.update({
@@ -41,13 +40,7 @@ if submitted:
         "active_jds": st.session_state.get("active_jds", 0) + 1,
     })
 
-    st.markdown("""
-    <div style="
-        background:rgba(52,211,153,0.06); border:1px solid rgba(52,211,153,0.2);
-        border-radius:8px; padding:12px 16px; margin:12px 0;
-        font-family:'DM Sans',sans-serif; font-size:13px; color:#34d399;
-    ">✓ JD processed and saved successfully</div>
-    """, unsafe_allow_html=True)
+    st.markdown("""<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:13px;color:#22c55e;margin:12px 0;">✓ JD processed and saved successfully</div>""", unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["📄  Parsed JD", "🎯  Skills Taxonomy", "⚖️  Bias Report"])
 
@@ -55,9 +48,8 @@ if submitted:
         jd_parsed = result.get("jd_parsed", {})
         if isinstance(jd_parsed, dict) and "raw_output" not in jd_parsed:
             col1, col2, col3 = st.columns(3)
-            col1.markdown(f"<div style='font-family:DM Sans;font-size:12px;color:rgba(232,230,240,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;'>Job Title</div><div style='font-family:Syne;font-size:15px;font-weight:600;color:#e8e6f0;'>{jd_parsed.get('job_title','N/A')}</div>", unsafe_allow_html=True)
-            col2.markdown(f"<div style='font-family:DM Sans;font-size:12px;color:rgba(232,230,240,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;'>Level</div><div style='font-family:Syne;font-size:15px;font-weight:600;color:#e8e6f0;'>{jd_parsed.get('experience_level','N/A')}</div>", unsafe_allow_html=True)
-            col3.markdown(f"<div style='font-family:DM Sans;font-size:12px;color:rgba(232,230,240,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;'>Location</div><div style='font-family:Syne;font-size:15px;font-weight:600;color:#e8e6f0;'>{jd_parsed.get('location','N/A')}</div>", unsafe_allow_html=True)
+            for col, key, label in [(col1,"job_title","Job Title"),(col2,"experience_level","Level"),(col3,"location","Location")]:
+                col.markdown(f"<div style='font-family:DM Sans;font-size:11px;color:rgba(232,230,240,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;'>{label}</div><div style='font-family:Syne,sans-serif;font-size:15px;font-weight:600;color:#e8e6f0;'>{jd_parsed.get(key,'N/A')}</div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             section_title("Responsibilities")
             for r in jd_parsed.get("responsibilities", []):
@@ -78,12 +70,12 @@ if submitted:
                     name = s.get("skill", s) if isinstance(s, dict) else s
                     weight = s.get("importance_weight", "") if isinstance(s, dict) else ""
                     badge = f"<span style='background:rgba(124,58,237,0.15);color:#a78bfa;font-size:10px;padding:1px 7px;border-radius:99px;margin-left:6px;'>{weight}/10</span>" if weight else ""
-                    st.markdown(f"<div style='font-family:DM Sans;font-size:13px;color:#e8e6f0;padding:7px 12px;background:#13131f;border:1px solid rgba(139,92,246,0.12);border-radius:6px;margin-bottom:6px;'><code style='background:transparent;color:#a78bfa;font-size:12px;'>{name}</code>{badge}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-family:DM Sans;font-size:13px;color:#e8e6f0;padding:7px 12px;background:#13131f;border:1px solid rgba(139,92,246,0.12);border-radius:6px;margin-bottom:6px;'><code style='background:transparent;color:#a78bfa;'>{name}</code>{badge}</div>", unsafe_allow_html=True)
             with col2:
                 section_title("Nice-to-Have Skills")
                 for s in skills.get("nice_to_have_skills", []):
                     name = s.get("skill", s) if isinstance(s, dict) else s
-                    st.markdown(f"<div style='font-family:DM Sans;font-size:13px;color:rgba(232,230,240,0.6);padding:7px 12px;background:#13131f;border:1px solid rgba(255,255,255,0.06);border-radius:6px;margin-bottom:6px;'><code style='background:transparent;color:rgba(167,139,250,0.6);font-size:12px;'>{name}</code></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-family:DM Sans;font-size:13px;color:rgba(232,230,240,0.6);padding:7px 12px;background:#13131f;border:1px solid rgba(255,255,255,0.06);border-radius:6px;margin-bottom:6px;'><code style='background:transparent;color:rgba(167,139,250,0.6);'>{name}</code></div>", unsafe_allow_html=True)
             section_title("Deal-breakers If Missing")
             for s in skills.get("red_flag_if_missing", []):
                 st.markdown(f"<div style='font-family:DM Sans;font-size:13px;color:#f87171;padding:7px 12px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:6px;margin-bottom:6px;'>⛔ {s}</div>", unsafe_allow_html=True)
@@ -94,23 +86,13 @@ if submitted:
         bias = result.get("bias_report", {})
         if isinstance(bias, dict) and "raw_output" not in bias:
             score = bias.get("bias_score", 0)
-            color = "#34d399" if score >= 7 else ("#fbbf24" if score >= 4 else "#f87171")
-            st.markdown(f"""
-            <div style='background:#13131f;border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:20px;margin-bottom:16px;'>
-                <div style='font-family:DM Sans;font-size:11px;color:rgba(232,230,240,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;'>Inclusivity Score</div>
-                <div style='font-family:Syne;font-size:36px;font-weight:800;color:{color};'>{score}<span style='font-size:18px;color:rgba(232,230,240,0.3);'>/10</span></div>
-                <div style='font-family:DM Sans;font-size:13px;color:rgba(232,230,240,0.55);margin-top:8px;'>{bias.get("overall_assessment","")}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            color = "#22c55e" if score >= 7 else ("#fbbf24" if score >= 4 else "#ef4444")
+            st.markdown(f"<div style='background:#13131f;border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:20px;margin-bottom:16px;'><div style='font-family:DM Sans;font-size:11px;color:rgba(232,230,240,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;'>Inclusivity Score</div><div style='font-family:Syne,sans-serif;font-size:36px;font-weight:800;color:{color};'>{score}<span style='font-size:18px;color:rgba(232,230,240,0.3);'>/10</span></div><div style='font-family:DM Sans;font-size:13px;color:rgba(232,230,240,0.55);margin-top:8px;'>{bias.get('overall_assessment','')}</div></div>", unsafe_allow_html=True)
             if bias.get("suggested_rewrites"):
                 section_title("Suggested Rewrites")
                 for orig, new in bias.get("suggested_rewrites", {}).items():
-                    st.markdown(f"<div style='font-family:DM Sans;font-size:13px;padding:8px 12px;background:#13131f;border:1px solid rgba(139,92,246,0.12);border-radius:6px;margin-bottom:6px;'><span style='color:#f87171;text-decoration:line-through;'>{orig}</span> → <span style='color:#34d399;'>{new}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-family:DM Sans;font-size:13px;padding:8px 12px;background:#13131f;border:1px solid rgba(139,92,246,0.12);border-radius:6px;margin-bottom:6px;'><span style='color:#f87171;text-decoration:line-through;'>{orig}</span> → <span style='color:#22c55e;'>{new}</span></div>", unsafe_allow_html=True)
         else:
             st.json(bias)
 
-    st.markdown("""
-    <div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:8px;padding:12px 16px;font-family:DM Sans;font-size:13px;color:rgba(232,230,240,0.5);margin-top:8px;'>
-        ✅ JD saved · Navigate to <strong style='color:#a78bfa;'>Resume Screening</strong> to upload candidates
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("<div style='background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:8px;padding:12px 16px;font-family:DM Sans;font-size:13px;color:rgba(232,230,240,0.5);margin-top:8px;'>✅ JD saved · Navigate to <strong style='color:#a78bfa;'>Resume Screening</strong> to upload candidates</div>", unsafe_allow_html=True)
