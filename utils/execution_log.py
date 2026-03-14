@@ -1,138 +1,201 @@
 """
 utils/execution_log.py
-Terminal-style live execution log component for RecruitIQ.
-Renders a macOS-style terminal window with real-time agent progress.
+Terminal-style live execution log using st.components.v1.html
 """
 import streamlit as st
+import streamlit.components.v1 as components
 import time
 
 
-def terminal_log(placeholder, logs: list, status: str = "running"):
-    """
-    Renders a terminal-style execution log.
-    logs: list of (tag, color, message) tuples
-    status: running | complete | error
-    """
-    status_dot = "🟡" if status == "running" else ("🟢" if status == "complete" else "🔴")
-    
+def _build_html(logs: list, status: str = "running") -> str:
+    status_color = "#fbbf24" if status == "running" else ("#22c55e" if status == "complete" else "#ef4444")
+    status_label = "RUNNING" if status == "running" else ("COMPLETE" if status == "complete" else "ERROR")
+
     rows_html = ""
     for i, (tag, color, msg) in enumerate(logs):
         ts = f"{i * 0.2:.1f}s"
         rows_html += f"""
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:5px 0;animation:fadein 0.3s ease forwards;opacity:0;animation-delay:{i*0.05}s;">
-            <span style="color:rgba(255,255,255,0.2);font-size:11px;min-width:28px;padding-top:1px;font-family:'JetBrains Mono',monospace;">{ts}</span>
-            <span style="
-                background:{color}22;color:{color};
-                font-size:10px;font-weight:700;
-                padding:1px 7px;border-radius:4px;
-                letter-spacing:1px;min-width:52px;text-align:center;
-                font-family:'JetBrains Mono',monospace;
-                border:1px solid {color}44;
-                flex-shrink:0;margin-top:1px;
-            ">{tag}</span>
-            <span style="color:rgba(255,255,255,0.75);font-size:12.5px;font-family:'JetBrains Mono',monospace;line-height:1.5;">{msg}</span>
+        <div class="row" style="animation-delay:{i*0.04}s">
+            <span class="ts">{ts}</span>
+            <span class="tag" style="background:{color}22;color:{color};border-color:{color}44;">{tag}</span>
+            <span class="msg">{msg}</span>
         </div>"""
 
-    # Blinking cursor if running
-    cursor = ""
-    if status == "running":
-        cursor = """<div style="display:flex;align-items:center;gap:12px;padding:5px 0;">
-            <span style="color:rgba(255,255,255,0.2);font-size:11px;min-width:28px;font-family:'JetBrains Mono',monospace;"></span>
-            <span style="display:inline-block;width:8px;height:16px;background:#a78bfa;border-radius:1px;animation:blink 1s step-end infinite;"></span>
-        </div>"""
+    cursor = '<div class="cursor-row"><span class="ts"></span><span class="cursor"></span></div>' if status == "running" else ""
 
-    placeholder.markdown(f"""
+    return f"""<!DOCTYPE html>
+<html>
+<head>
 <style>
-@keyframes fadein {{ to {{ opacity:1; }} }}
-@keyframes blink {{ 0%,100%{{opacity:1}} 50%{{opacity:0}} }}
-@keyframes spin {{ to{{transform:rotate(360deg)}} }}
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: transparent; font-family: 'JetBrains Mono', monospace; }}
+
+  .terminal {{
+    background: #0d0d14;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+  }}
+
+  .titlebar {{
+    background: #161622;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }}
+  .dots {{ display: flex; gap: 6px; }}
+  .dot {{ width: 12px; height: 12px; border-radius: 50%; }}
+  .dot-r {{ background: #ff5f57; }}
+  .dot-y {{ background: #ffbd2e; }}
+  .dot-g {{ background: #28ca41; }}
+  .title {{
+    color: rgba(255,255,255,0.3);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-left: 8px;
+  }}
+  .status {{
+    margin-left: auto;
+    font-size: 11px;
+    color: {status_color};
+    letter-spacing: 1px;
+  }}
+  .status-dot {{
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: {status_color};
+    margin-right: 6px;
+    {"animation: pulse 1.2s ease-in-out infinite;" if status == "running" else ""}
+  }}
+
+  .body {{
+    padding: 16px 20px;
+    min-height: 140px;
+    max-height: 320px;
+    overflow-y: auto;
+  }}
+
+  .row {{
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 4px 0;
+    opacity: 0;
+    animation: fadein 0.25s ease forwards;
+  }}
+  .ts {{
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    min-width: 30px;
+    padding-top: 1px;
+    flex-shrink: 0;
+  }}
+  .tag {{
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    min-width: 54px;
+    text-align: center;
+    border: 1px solid;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }}
+  .msg {{
+    color: rgba(255,255,255,0.72);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }}
+
+  .cursor-row {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+  }}
+  .cursor {{
+    display: inline-block;
+    width: 8px; height: 16px;
+    background: #a78bfa;
+    border-radius: 1px;
+    animation: blink 1s step-end infinite;
+    margin-left: 46px;
+  }}
+
+  @keyframes fadein {{ to {{ opacity: 1; }} }}
+  @keyframes blink {{ 0%,100%{{opacity:1}} 50%{{opacity:0}} }}
+  @keyframes pulse {{ 0%,100%{{opacity:1}} 50%{{opacity:0.3}} }}
+
+  .body::-webkit-scrollbar {{ width: 3px; }}
+  .body::-webkit-scrollbar-thumb {{ background: rgba(139,92,246,0.3); border-radius: 99px; }}
 </style>
-<div style="
-    background:#0d0d14;
-    border:1px solid rgba(255,255,255,0.08);
-    border-radius:12px;
-    overflow:hidden;
-    font-family:'JetBrains Mono',monospace;
-    margin:16px 0;
-    box-shadow:0 24px 48px rgba(0,0,0,0.4);
-">
-    <!-- Title bar -->
-    <div style="
-        background:#161622;
-        border-bottom:1px solid rgba(255,255,255,0.06);
-        padding:10px 16px;
-        display:flex;
-        align-items:center;
-        gap:10px;
-    ">
-        <div style="display:flex;gap:6px;">
-            <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></div>
-            <div style="width:12px;height:12px;border-radius:50%;background:#ffbd2e;"></div>
-            <div style="width:12px;height:12px;border-radius:50%;background:#28ca41;"></div>
-        </div>
-        <span style="
-            color:rgba(255,255,255,0.35);
-            font-size:11px;
-            letter-spacing:2px;
-            text-transform:uppercase;
-            margin-left:8px;
-        ">RECRUITIQ · EXECUTION LOG</span>
-        <div style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.25);">
-            {status_dot} {"RUNNING" if status=="running" else ("COMPLETE" if status=="complete" else "ERROR")}
-        </div>
+</head>
+<body>
+<div class="terminal">
+  <div class="titlebar">
+    <div class="dots">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
     </div>
-    <!-- Log body -->
-    <div style="padding:16px 20px;min-height:160px;max-height:340px;overflow-y:auto;">
-        {rows_html}
-        {cursor}
+    <span class="title">RECRUITIQ · EXECUTION LOG</span>
+    <div class="status">
+      <span class="status-dot"></span>{status_label}
     </div>
+  </div>
+  <div class="body" id="logbody">
+    {rows_html}
+    {cursor}
+  </div>
 </div>
-""", unsafe_allow_html=True)
+<script>
+  var el = document.getElementById('logbody');
+  if(el) el.scrollTop = el.scrollHeight;
+</script>
+</body>
+</html>"""
 
 
 def run_crew_with_log(crew_fn, *args, phase_name="Crew", agents=None, **kwargs):
-    """
-    Runs a crew function while showing a live terminal log.
-    Returns the crew result.
-    """
+    """Run a crew function with a live terminal-style execution log."""
     if agents is None:
         agents = []
 
     placeholder = st.empty()
     logs = []
 
-    def add_log(tag, color, msg):
+    def render(status="running"):
+        with placeholder:
+            components.html(_build_html(logs, status), height=320, scrolling=False)
+
+    def add(tag, color, msg):
         logs.append((tag, color, msg))
-        terminal_log(placeholder, logs, status="running")
+        render("running")
+        time.sleep(0.12)
 
-    # Boot sequence
-    add_log("SYS", "#64748b", f"Initializing {phase_name} · Python 3.11")
-    time.sleep(0.15)
-    add_log("SYS", "#64748b", "Model: LLaMA 3.3 70B  ·  Provider: GROQ  ·  Mode: Sequential")
-    time.sleep(0.15)
-    add_log("AGENT", "#a78bfa", f"Instantiating {len(agents)} specialist agents...")
-    time.sleep(0.1)
+    add("SYS",   "#64748b", f"Initializing {phase_name}")
+    add("SYS",   "#64748b", "Model: LLaMA 3.3 70B  ·  Provider: GROQ  ·  Mode: Sequential")
+    add("AGENT", "#a78bfa", f"Instantiating {len(agents)} specialist agents...")
     if agents:
-        add_log("AGENT", "#a78bfa", "  ·  ".join(agents))
-    time.sleep(0.1)
-    add_log("TASK", "#f59e0b", f"{len(agents)} tasks queued  →  Sequential pipeline starting")
-    time.sleep(0.2)
-
-    # Agent progress
+        add("AGENT", "#a78bfa", "  ·  ".join(agents))
+    add("TASK",  "#f59e0b", f"{len(agents)} tasks queued  →  Sequential pipeline starting")
     for i, agent in enumerate(agents):
-        add_log("RUN", "#06b6d4", f"[{i+1}/{len(agents)}] {agent} → working...")
-        time.sleep(0.1)
+        add("RUN", "#06b6d4", f"[{i+1}/{len(agents)}] {agent} → working...")
+    add("LLM",   "#8b5cf6", "Sending prompts to Groq API  ·  Awaiting response...")
 
-    add_log("LLM", "#8b5cf6", "Sending prompts to Groq API...")
-    time.sleep(0.2)
-
-    # Run the actual crew
     try:
         result = crew_fn(*args, **kwargs)
         logs.append(("DONE", "#22c55e", f"✓ {phase_name} completed successfully"))
-        terminal_log(placeholder, logs, status="complete")
+        render("complete")
         return result
     except Exception as e:
-        logs.append(("ERROR", "#ef4444", str(e)[:120]))
-        terminal_log(placeholder, logs, status="error")
+        logs.append(("ERROR", "#ef4444", str(e)[:100]))
+        render("error")
         raise e
