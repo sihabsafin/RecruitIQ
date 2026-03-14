@@ -1,4 +1,5 @@
 import os
+import time
 
 def _secret(key: str, default: str = "") -> str:
     try:
@@ -10,23 +11,34 @@ def _secret(key: str, default: str = "") -> str:
 
 def get_llm(temperature: float = 0.3):
     from crewai import LLM
-    groq_key = _secret("GROQ_API_KEY")
-    if groq_key:
-        os.environ["GROQ_API_KEY"] = groq_key
-        return LLM(
-            model="groq/llama-3.3-70b-versatile",
-            api_key=groq_key,
-            temperature=temperature,
-        )
+    groq_key   = _secret("GROQ_API_KEY")
     gemini_key = _secret("GEMINI_API_KEY")
+
+    if groq_key:
+        os.environ["GROQ_API_KEY"]   = groq_key
     if gemini_key:
         os.environ["GEMINI_API_KEY"] = gemini_key
+
+    # Try Groq first
+    if groq_key:
+        try:
+            return LLM(
+                model="groq/llama-3.3-70b-versatile",
+                api_key=groq_key,
+                temperature=temperature,
+            )
+        except Exception:
+            pass
+
+    # Fallback to Gemini
+    if gemini_key:
         return LLM(
             model="gemini/gemini-2.0-flash",
             api_key=gemini_key,
             temperature=temperature,
         )
-    raise ValueError("No LLM API key found. Add GROQ_API_KEY to Streamlit secrets.")
+
+    raise ValueError("No API key found. Add GROQ_API_KEY or GEMINI_API_KEY to Streamlit secrets.")
 
 SUPABASE_URL = _secret("SUPABASE_URL")
 SUPABASE_KEY = _secret("SUPABASE_KEY")
